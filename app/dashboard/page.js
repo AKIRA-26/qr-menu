@@ -1,24 +1,41 @@
 'use client'
+export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function Dashboard() {
   const [orders, setOrders] = useState([])
-  const [restaurantId, setRestaurantId] = useState(null)
+  const [restaurant, setRestaurant] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
     getRestaurant()
   }, [])
 
   async function getRestaurant() {
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    const { data: rest } = await supabase
       .from('restaurants')
-      .select('id')
-      .eq('slug', 'spice-garden')
+      .select('*')
+      .eq('owner_id', user.id)
       .single()
-    setRestaurantId(data.id)
-    fetchOrders(data.id)
-    subscribeToOrders(data.id)
+
+    if (!rest) {
+      router.push('/login')
+      return
+    }
+
+    setRestaurant(rest)
+    setLoading(false)
+    fetchOrders(rest.id)
+    subscribeToOrders(rest.id)
   }
 
   async function fetchOrders(id) {
@@ -32,7 +49,7 @@ export default function Dashboard() {
 
   function subscribeToOrders(id) {
     supabase
-      .channel('orders')
+      .channel('orders-' + id)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -49,6 +66,11 @@ export default function Dashboard() {
     setOrders(orders.map(o => o.id === orderId ? { ...o, status } : o))
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   const statusColor = {
     pending: 'bg-yellow-100 text-yellow-700',
     preparing: 'bg-blue-100 text-blue-700',
@@ -56,26 +78,56 @@ export default function Dashboard() {
     served: 'bg-gray-100 text-gray-500'
   }
 
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <p className="text-gray-400">Loading your dashboard...</p>
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-orange-500 text-white p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Spice Garden — Dashboard</h1>
+          <h1 className="text-2xl font-bold">{restaurant?.name} — Dashboard</h1>
           <p className="text-orange-100 text-sm">Live orders will appear here instantly</p>
         </div>
-        <div className="bg-orange-400 px-4 py-2 rounded-xl text-sm font-semibold">
-          {orders.filter(o => o.status === 'pending').length} pending
+        <div className="flex items-center gap-3">
+          <div className="bg-orange-400 px-4 py-2 rounded-xl text-sm font-semibold">
+            {orders.filter(o => o.status === 'pending').length} pending
+          </div>
+          <button
+            onClick={handleLogout}
+            className="bg-white text-orange-500 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-50"
+          >
+            Logout
+          </button>
         </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-4">
+        {/* Quick links */}
+        <div className="flex gap-3 mt-4 mb-6">
+          <a href="/menu-manager"
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50">
+            ✏️ Menu Manager
+          </a>
+          <a href="/qr-generator"
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50">
+            🔳 QR Generator
+          </a>
+          <a href={`/menu/${restaurant?.slug}/table/1`} target="_blank"
+            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-gray-50">
+            👁️ View Menu
+          </a>
+        </div>
+
         {orders.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
             <div className="text-5xl mb-4">🍽️</div>
             <p className="text-lg">No orders yet. Waiting for customers...</p>
           </div>
         ) : (
-          <div className="space-y-4 mt-4">
+          <div className="space-y-4">
             {orders.map(order => (
               <div key={order.id} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
                 <div className="flex justify-between items-center mb-3">

@@ -1,6 +1,8 @@
 'use client'
+export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useRouter } from 'next/navigation'
 import QRCode from 'react-qr-code'
 
 export default function QRGenerator() {
@@ -8,6 +10,7 @@ export default function QRGenerator() {
   const [tableCount, setTableCount] = useState(5)
   const [generated, setGenerated] = useState(false)
   const [baseUrl, setBaseUrl] = useState('')
+  const router = useRouter()
 
   useEffect(() => {
     setBaseUrl(window.location.origin)
@@ -15,12 +18,17 @@ export default function QRGenerator() {
   }, [])
 
   async function getRestaurant() {
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+
+    const { data: rest } = await supabase
       .from('restaurants')
       .select('*')
-      .eq('slug', 'spice-garden')
+      .eq('owner_id', user.id)
       .single()
-    setRestaurant(data)
+
+    if (!rest) { router.push('/login'); return }
+    setRestaurant(rest)
   }
 
   function downloadQR(tableNumber) {
@@ -60,53 +68,47 @@ export default function QRGenerator() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-orange-500 text-white p-4">
-        <h1 className="text-2xl font-bold">QR Code Generator</h1>
-        <p className="text-orange-100 text-sm">Generate QR codes for each table</p>
+      <div className="bg-orange-500 text-white p-4 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">QR Code Generator</h1>
+          <p className="text-orange-100 text-sm">{restaurant?.name}</p>
+        </div>
+        <a href="/dashboard"
+          className="bg-white text-orange-500 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-50">
+          ← Dashboard
+        </a>
       </div>
 
       <div className="max-w-4xl mx-auto p-4">
         <div className="bg-white rounded-2xl p-6 shadow-sm mb-6 mt-4">
           <h2 className="font-bold text-gray-800 text-lg mb-4">Setup</h2>
-
           <div className="mb-4">
             <label className="text-sm font-semibold text-gray-600 block mb-1">Restaurant</label>
             <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2 text-orange-700 font-semibold">
               {restaurant?.name}
             </div>
           </div>
-
           <div className="mb-4">
             <label className="text-sm font-semibold text-gray-600 block mb-1">Number of Tables</label>
-            <input
-              type="number"
-              min="1"
-              max="50"
-              value={tableCount}
+            <input type="number" min="1" max="50" value={tableCount}
               onChange={e => { setTableCount(parseInt(e.target.value)); setGenerated(false) }}
-              className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-400"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-400 text-gray-800"
             />
           </div>
-
           <div className="mb-4">
             <label className="text-sm font-semibold text-gray-600 block mb-1">Each QR code will link to</label>
             <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-gray-500 text-sm font-mono break-all">
               {baseUrl}/menu/{restaurant?.slug}/table/[number]
             </div>
           </div>
-
           <div className="flex gap-3">
-            <button
-              onClick={() => setGenerated(true)}
-              className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600"
-            >
+            <button onClick={() => setGenerated(true)}
+              className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600">
               Generate QR Codes
             </button>
             {generated && (
-              <button
-                onClick={downloadAll}
-                className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900"
-              >
+              <button onClick={downloadAll}
+                className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold hover:bg-gray-900">
                 Download All
               </button>
             )}
@@ -134,10 +136,8 @@ export default function QRGenerator() {
                   <p className="text-xs text-gray-400 mb-3 break-all font-mono">
                     /menu/{restaurant?.slug}/table/{table}
                   </p>
-                  <button
-                    onClick={() => downloadQR(table)}
-                    className="w-full bg-orange-500 text-white py-2 rounded-xl text-sm font-semibold hover:bg-orange-600"
-                  >
+                  <button onClick={() => downloadQR(table)}
+                    className="w-full bg-orange-500 text-white py-2 rounded-xl text-sm font-semibold hover:bg-orange-600">
                     Download
                   </button>
                 </div>

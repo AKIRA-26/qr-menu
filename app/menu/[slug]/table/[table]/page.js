@@ -9,17 +9,26 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState([])
   const [cart, setCart] = useState([])
   const [orderPlaced, setOrderPlaced] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (slug) fetchData()
+  }, [slug])
 
   async function fetchData() {
-    const { data: rest } = await supabase
+    const { data: rest, error: restError } = await supabase
       .from('restaurants')
       .select('*')
       .eq('slug', slug)
       .single()
+
+    if (restError || !rest) {
+      setError('Restaurant not found')
+      setLoading(false)
+      return
+    }
+
     setRestaurant(rest)
 
     const { data: items } = await supabase
@@ -27,7 +36,10 @@ export default function MenuPage() {
       .select('*')
       .eq('restaurant_id', rest.id)
       .eq('is_available', true)
-    setMenuItems(items)
+      .order('category')
+
+    setMenuItems(items || [])
+    setLoading(false)
   }
 
   function addToCart(item) {
@@ -60,6 +72,22 @@ export default function MenuPage() {
 
   const categories = [...new Set(menuItems.map(i => i.category))]
 
+  if (loading) return (
+    <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <p className="text-gray-400">Loading menu...</p>
+    </div>
+  )
+
+  if (error) return (
+    <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-5xl mb-4">🍽️</div>
+        <p className="text-gray-600 text-lg">{error}</p>
+        <p className="text-gray-400 text-sm mt-2">Check the QR code and try again</p>
+      </div>
+    </div>
+  )
+
   if (orderPlaced) return (
     <div className="min-h-screen bg-orange-50 flex items-center justify-center">
       <div className="text-center p-8">
@@ -86,26 +114,33 @@ export default function MenuPage() {
       </div>
 
       <div className="max-w-2xl mx-auto p-4">
-        {categories.map(category => (
-          <div key={category} className="mb-6">
-            <h2 className="text-lg font-bold text-orange-500 mb-3">{category}</h2>
-            <div className="space-y-3">
-              {menuItems.filter(i => i.category === category).map(item => (
-                <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-gray-800">{item.name}</h3>
-                    <p className="text-sm text-gray-500">{item.description}</p>
-                    <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
-                  </div>
-                  <button onClick={() => addToCart(item)}
-                    className="bg-orange-500 text-white w-9 h-9 rounded-full text-xl font-bold hover:bg-orange-600">
-                    +
-                  </button>
-                </div>
-              ))}
-            </div>
+        {menuItems.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">
+            <div className="text-5xl mb-4">🍽️</div>
+            <p>No menu items yet. Check back soon!</p>
           </div>
-        ))}
+        ) : (
+          categories.map(category => (
+            <div key={category} className="mb-6">
+              <h2 className="text-lg font-bold text-orange-500 mb-3">{category}</h2>
+              <div className="space-y-3">
+                {menuItems.filter(i => i.category === category).map(item => (
+                  <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold text-gray-800">{item.name}</h3>
+                      <p className="text-sm text-gray-500">{item.description}</p>
+                      <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
+                    </div>
+                    <button onClick={() => addToCart(item)}
+                      className="bg-orange-500 text-white w-9 h-9 rounded-full text-xl font-bold hover:bg-orange-600">
+                      +
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
 
         {cart.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm mt-4">
