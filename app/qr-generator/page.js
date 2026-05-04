@@ -96,10 +96,15 @@ export default function QRGenerator() {
             />
           </div>
           <div className="mb-4">
-            <label className="text-sm font-semibold text-gray-600 block mb-1">Each QR code will link to</label>
-            <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-gray-500 text-sm font-mono break-all">
-              {baseUrl}/menu/{restaurant?.slug}/table/[number]
-            </div>
+            <label className="text-sm font-semibold text-gray-600 block mb-1">Base URL (Use your PC's IP address for mobile scanning)</label>
+            <input type="text" value={baseUrl}
+              onChange={e => { setBaseUrl(e.target.value); setGenerated(false) }}
+              className="w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:border-orange-400 text-gray-800 font-mono text-sm mb-2"
+              placeholder="http://192.168.1.x:3000"
+            />
+            <p className="text-xs text-gray-500">
+              Preview: <span className="font-mono">{baseUrl}/menu/{restaurant?.slug}/table/[number]</span>
+            </p>
           </div>
           <div className="flex gap-3">
             <button onClick={() => setGenerated(true)}
