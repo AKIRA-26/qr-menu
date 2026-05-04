@@ -125,13 +125,18 @@ export default function MenuPage() {
               <h2 className="text-lg font-bold text-orange-500 mb-3">{category}</h2>
               <div className="space-y-3">
                 {menuItems.filter(i => i.category === category).map(item => (
-                  <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center">
-                    <div>
-                      <h3 className="font-semibold text-gray-800">{item.name}</h3>
-                      <p className="text-sm text-gray-500">{item.description}</p>
-                      <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
-                    </div>
-                    <button onClick={() => addToCart(item)}
+                 <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm flex justify-between items-center gap-3">
+  {item.image_url && (
+    <img src={item.image_url} alt={item.name}
+      className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
+    />
+  )}
+  <div className="flex-1">
+    <h3 className="font-semibold text-gray-800">{item.name}</h3>
+    <p className="text-sm text-gray-500">{item.description}</p>
+    <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
+  </div>
+  <button onClick={() => addToCart(item)}
                       className="bg-orange-500 text-white w-9 h-9 rounded-full text-xl font-bold hover:bg-orange-600">
                       +
                     </button>

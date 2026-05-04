@@ -10,24 +10,19 @@ export default function MenuManager() {
   const [showForm, setShowForm] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [form, setForm] = useState({ name: '', description: '', price: '', category: '' })
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState(null)
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const router = useRouter()
 
-  useEffect(() => {
-    getRestaurant()
-  }, [])
+  useEffect(() => { getRestaurant() }, [])
 
   async function getRestaurant() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
-
     const { data: rest } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('owner_id', user.id)
-      .single()
-
+      .from('restaurants').select('*').eq('owner_id', user.id).single()
     if (!rest) { router.push('/login'); return }
     setRestaurant(rest)
     fetchItems(rest.id)
@@ -35,16 +30,15 @@ export default function MenuManager() {
 
   async function fetchItems(id) {
     const { data } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('restaurant_id', id)
-      .order('category')
+      .from('menu_items').select('*').eq('restaurant_id', id).order('category')
     setMenuItems(data || [])
   }
 
   function openAddForm() {
     setEditingItem(null)
     setForm({ name: '', description: '', price: '', category: '' })
+    setImageFile(null)
+    setImagePreview(null)
     setShowForm(true)
   }
 
@@ -56,7 +50,29 @@ export default function MenuManager() {
       price: item.price,
       category: item.category || ''
     })
+    setImageFile(null)
+    setImagePreview(item.image_url || null)
     setShowForm(true)
+  }
+
+  function handleImageChange(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  async function uploadImage(file) {
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${restaurant.id}-${Date.now()}.${fileExt}`
+    const { error } = await supabase.storage
+      .from('menu-images')
+      .upload(fileName, file)
+    if (error) return null
+    const { data } = supabase.storage
+      .from('menu-images')
+      .getPublicUrl(fileName)
+    return data.publicUrl
   }
 
   async function saveItem() {
@@ -66,12 +82,18 @@ export default function MenuManager() {
     }
     setLoading(true)
 
+    let imageUrl = editingItem?.image_url || null
+    if (imageFile) {
+      imageUrl = await uploadImage(imageFile)
+    }
+
     if (editingItem) {
       await supabase.from('menu_items').update({
         name: form.name,
         description: form.description,
         price: parseFloat(form.price),
-        category: form.category
+        category: form.category,
+        image_url: imageUrl
       }).eq('id', editingItem.id)
       setMessage('Item updated!')
     } else {
@@ -81,6 +103,7 @@ export default function MenuManager() {
         description: form.description,
         price: parseFloat(form.price),
         category: form.category,
+        image_url: imageUrl,
         is_available: true
       })
       setMessage('Item added!')
@@ -88,6 +111,8 @@ export default function MenuManager() {
 
     setLoading(false)
     setShowForm(false)
+    setImageFile(null)
+    setImagePreview(null)
     fetchItems(restaurant.id)
     setTimeout(() => setMessage(''), 3000)
   }
@@ -102,8 +127,7 @@ export default function MenuManager() {
 
   async function toggleAvailability(item) {
     await supabase.from('menu_items')
-      .update({ is_available: !item.is_available })
-      .eq('id', item.id)
+      .update({ is_available: !item.is_available }).eq('id', item.id)
     setMenuItems(menuItems.map(i =>
       i.id === item.id ? { ...i, is_available: !i.is_available } : i
     ))
@@ -120,11 +144,11 @@ export default function MenuManager() {
         </div>
         <div className="flex gap-3">
           <a href="/dashboard"
-            className="bg-white text-orange-500 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-orange-50">
+            className="bg-white text-orange-500 px-4 py-2 rounded-xl text-sm font-semibold">
             ← Dashboard
           </a>
           <button onClick={openAddForm}
-            className="bg-white text-orange-500 font-bold px-5 py-2 rounded-xl hover:bg-orange-50 text-sm">
+            className="bg-white text-orange-500 font-bold px-5 py-2 rounded-xl text-sm">
             + Add Dish
           </button>
         </div>
@@ -177,14 +201,42 @@ export default function MenuManager() {
                   />
                 </div>
               </div>
+
+              {/* Image Upload */}
+              <div>
+                <label className="text-sm font-semibold text-gray-600">Dish Photo</label>
+                <div className="mt-1 flex items-center gap-4">
+                  {imagePreview && (
+                    <img src={imagePreview} alt="preview"
+                      className="w-20 h-20 object-cover rounded-xl border border-gray-200"
+                    />
+                  )}
+                  <label className="cursor-pointer bg-gray-50 border border-dashed border-gray-300 rounded-xl px-4 py-3 text-sm text-gray-500 hover:bg-gray-100 flex items-center gap-2">
+                    📷 {imagePreview ? 'Change Photo' : 'Upload Photo'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {imagePreview && (
+                    <button onClick={() => { setImageFile(null); setImagePreview(null) }}
+                      className="text-red-400 text-sm hover:text-red-600">
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
+
             <div className="flex gap-3 mt-5">
               <button onClick={saveItem} disabled={loading}
                 className="flex-1 bg-orange-500 text-white py-2.5 rounded-xl font-semibold hover:bg-orange-600 disabled:opacity-50">
                 {loading ? 'Saving...' : editingItem ? 'Save Changes' : 'Add Dish'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-semibold hover:bg-gray-200">
+                className="flex-1 bg-gray-100 text-gray-600 py-2.5 rounded-xl font-semibold">
                 Cancel
               </button>
             </div>
@@ -204,18 +256,29 @@ export default function MenuManager() {
             <div className="space-y-3">
               {menuItems.filter(i => i.category === category).map(item => (
                 <div key={item.id}
-                  className={`bg-white rounded-2xl p-4 shadow-sm border flex justify-between items-center ${!item.is_available ? 'opacity-50' : 'border-gray-100'}`}>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-800">{item.name}</h3>
-                      {!item.is_available && (
-                        <span className="text-xs bg-red-100 text-red-500 px-2 py-0.5 rounded-full">Unavailable</span>
-                      )}
+                  className={`bg-white rounded-2xl p-4 shadow-sm border flex justify-between items-center gap-4 ${!item.is_available ? 'opacity-50' : 'border-gray-100'}`}>
+                  <div className="flex items-center gap-4">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name}
+                        className="w-16 h-16 object-cover rounded-xl flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-orange-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
+                        🍽️
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-800">{item.name}</h3>
+                        {!item.is_available && (
+                          <span className="text-xs bg-red-100 text-red-500 px-2 py-0.5 rounded-full">Unavailable</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500">{item.description}</p>
+                      <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
                     </div>
-                    <p className="text-sm text-gray-500">{item.description}</p>
-                    <p className="text-orange-500 font-bold mt-1">₹{item.price}</p>
                   </div>
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-2 items-center flex-shrink-0">
                     <button onClick={() => toggleAvailability(item)}
                       className={`text-xs px-3 py-1.5 rounded-xl font-semibold ${item.is_available ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
                       {item.is_available ? 'Available' : 'Unavailable'}
